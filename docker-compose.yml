@@ -1,0 +1,133 @@
+---
+version: "3.8"
+
+services:
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    hostname: pihole
+    environment:
+      TZ: ${TIMEZONE} 
+      WEBPASSWORD: ''
+      FTLCONF_LOCAL_IPV4: 192.168.0.3
+      PIHOLE_UID: ${PUID}
+      PIHOLE_GUID: ${GUID}
+    networks:
+      pihole_network:
+        ipv4_address: 192.168.0.3
+    dns: 
+      - 8.8.8.8
+    volumes:
+      - './data/pihole/etc/:/etc/pihole/'
+      - './data/pihole/dnsmasq/:/etc/dnsmasq.d/'
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - unbound
+    restart: unless-stopped
+    
+  unbound:
+    container_name: unbound
+    image: mvance/unbound:latest
+    hostname: unbound
+    #mac_address: d0:ca:ab:cd:ef:02
+    ports:
+      - 53/tcp
+      - 53/udp
+    networks:
+      pihole_network:
+        ipv4_address: 192.168.0.4
+    restart: always
+
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TIMEZONE}
+      - WEBUI_PORT=8080
+    volumes:
+      - './data/qbittorrent/config:/config'
+      - '../downloads:/downloads'
+    ports:
+      - 8080:8080
+      - 6881:6881
+      - 6881:6881/udp
+        #deploy:
+        #resources:
+        #   limits:
+        #     cpus: '0.5'
+        #      memory: 512M
+    restart: unless-stopped
+
+  emby:
+    image: lscr.io/linuxserver/emby:latest
+    container_name: emby
+    hostname: miniserver_emby
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - './data/emby/config:/config'
+      - '../downloads:/downloads'
+    ports:
+      - 8096:8096
+    restart: unless-stopped
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    hostname: miniserver_jellyfin
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - './data/jellyfin/config:/config'
+      - '../downloads:/data/downloads'
+    ports:
+      - 8097:8096
+      #- 8920:8920 #optional
+      #- 7359:7359/udp #optional
+      #- 1900:1900/udp #optional
+    restart: unless-stopped
+
+    
+###################################
+  amule:
+    container_name: amule
+    image: ngosang/amule
+    hostname: amule
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - WEBUI_PWD=admin
+      - GUI_PWD=admin
+      - MOD_AUTO_RESTART_ENABLED=true
+      - MOD_AUTO_RESTART_CRON=0 6 * * *
+      - MOD_FIX_KAD_GRAPH_ENABLED=true
+    ports:
+      - 4711:4711
+      - 4712:4712
+      - 4662:4662
+      - 4665:4665/udp
+      - 4672:4672/udp
+    volumes:
+      - './data/amule/config:/home/amule/.aMule'
+      - '../amule/tmp:/tmp'
+      - '../amule/incoming:/incoming'
+    restart: unless-stopped    
+
+networks:
+  pihole_network:
+    driver: macvlan
+    driver_opts:
+      parent: enp1s0
+    ipam:
+      config:
+        - subnet: 192.168.0.0/24
+          gateway: 192.168.0.1
+          #ip_range: 192.168.0.200/28
+
